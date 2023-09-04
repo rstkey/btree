@@ -128,20 +128,20 @@ func (n *mapNode[K, V]) leaf() bool {
 	return n.children == nil
 }
 
-func (tr *Map[K, V]) search(n *mapNode[K, V], key K) (index int, found bool) {
-	low, high := 0, len(n.items)
-	for low < high {
-		h := (low + high) / 2
-		if !(key < n.items[h].key) {
-			low = h + 1
-		} else {
+func (tr *Map[K, V]) search(n *mapNode[K, V], key K) (idx int, found bool) {
+	high := len(n.items)
+	for idx < high {
+		h := (idx + high) / 2
+		if key < n.items[h].key {
 			high = h
+			continue
 		}
+		idx = h + 1
 	}
-	if low > 0 && !(n.items[low-1].key < key) {
-		return low - 1, true
+	if idx > 0 && !(n.items[idx-1].key < key) {
+		return idx - 1, true
 	}
-	return low, false
+	return idx, false
 }
 
 func (tr *Map[K, V]) init(degree int) {
@@ -295,7 +295,20 @@ func (tr *Map[K, V]) nodeScan(cn **mapNode[K, V],
 
 // Get a value for key.
 func (tr *Map[K, V]) Get(key K) (V, bool) {
-	return tr.get(key, false)
+	if tr.root == nil {
+		return tr.empty.value, false
+	}
+	n := tr.root
+	for {
+		i, found := tr.search(n, key)
+		if found {
+			return n.items[i].value, true
+		}
+		if n.leaf() {
+			return tr.empty.value, false
+		}
+		n = (*n.children)[i]
+	}
 }
 
 // GetMut gets a value for key.
@@ -310,14 +323,10 @@ func (tr *Map[K, V]) Get(key K) (V, bool) {
 // Mut methods may modify the tree structure and should have the same
 // considerations as other mutable operations like Set, Delete, Clear, etc.
 func (tr *Map[K, V]) GetMut(key K) (V, bool) {
-	return tr.get(key, true)
-}
-
-func (tr *Map[K, V]) get(key K, mut bool) (V, bool) {
 	if tr.root == nil {
 		return tr.empty.value, false
 	}
-	n := tr.isoLoad(&tr.root, mut)
+	n := tr.isoLoad(&tr.root, true)
 	for {
 		i, found := tr.search(n, key)
 		if found {
@@ -326,7 +335,7 @@ func (tr *Map[K, V]) get(key K, mut bool) (V, bool) {
 		if n.leaf() {
 			return tr.empty.value, false
 		}
-		n = tr.isoLoad(&(*n.children)[i], mut)
+		n = tr.isoLoad(&(*n.children)[i], true)
 	}
 }
 
