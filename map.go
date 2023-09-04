@@ -115,10 +115,9 @@ func (tr *Map[K, V]) IsoCopy() *Map[K, V] {
 }
 
 func (tr *Map[K, V]) newNode(leaf bool) *mapNode[K, V] {
-	n := new(mapNode[K, V])
-	n.isoid = tr.isoid
+	n := &mapNode[K, V]{isoid: tr.isoid}
 	if !leaf {
-		n.children = new([]*mapNode[K, V])
+		n.children = &[]*mapNode[K, V]{}
 	}
 	return n
 }
