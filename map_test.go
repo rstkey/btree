@@ -960,11 +960,11 @@ func (n *mapNode[K, V]) saneheight(height, maxheight int) bool {
 	} else {
 		i := 0
 		for ; i < len(n.items); i++ {
-			if !(*n.children)[i].saneheight(height+1, maxheight) {
+			if !(n.children)[i].saneheight(height+1, maxheight) {
 				return false
 			}
 		}
-		if !(*n.children)[i].saneheight(height+1, maxheight) {
+		if !(n.children)[i].saneheight(height+1, maxheight) {
 			return false
 		}
 	}
@@ -983,7 +983,7 @@ func (n *mapNode[K, V]) deepcount() int {
 	count := len(n.items)
 	if !n.leaf() {
 		for i := 0; i <= len(n.items); i++ {
-			count += (*n.children)[i].deepcount()
+			count += (n.children)[i].deepcount()
 		}
 	}
 	if n.count != count {
@@ -1005,17 +1005,17 @@ func (tr *Map[K, V]) nodesaneprops(n *mapNode[K, V], height int) bool {
 		}
 	}
 	if !n.leaf() {
-		if len(*n.children) != len(n.items)+1 {
+		if len(n.children) != len(n.items)+1 {
 			println(3)
 			return false
 		}
 		for i := 0; i < len(n.items); i++ {
-			if !tr.nodesaneprops((*n.children)[i], height+1) {
+			if !tr.nodesaneprops((n.children)[i], height+1) {
 				println(4)
 				return false
 			}
 		}
-		if !tr.nodesaneprops((*n.children)[len(n.items)], height+1) {
+		if !tr.nodesaneprops((n.children)[len(n.items)], height+1) {
 			println(5)
 			return false
 		}
@@ -1038,19 +1038,19 @@ func (tr *Map[K, V]) sanenilsnode(n *mapNode[K, V]) bool {
 		}
 	}
 	if !n.leaf() {
-		for i := 0; i < len(*n.children); i++ {
-			if (*n.children)[i] == nil {
+		for i := 0; i < len(n.children); i++ {
+			if (n.children)[i] == nil {
 				return false
 			}
 		}
-		children := (*n.children)[:cap(*n.children):cap(*n.children)]
-		for i := len(*n.children); i < len(children); i++ {
+		children := (n.children)[:cap(n.children):cap(n.children)]
+		for i := len(n.children); i < len(children); i++ {
 			if children[i] != nil {
 				return false
 			}
 		}
-		for i := 0; i < len(*n.children); i++ {
-			if !tr.sanenilsnode((*n.children)[i]) {
+		for i := 0; i < len(n.children); i++ {
+			if !tr.sanenilsnode((n.children)[i]) {
 				return false
 			}
 		}

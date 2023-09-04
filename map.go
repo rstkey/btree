@@ -65,7 +65,7 @@ type mapNode[K ordered, V any] struct {
 	isoid    uint64
 	count    int
 	items    []mapPair[K, V]
-	children *[]*mapNode[K, V]
+	children []*mapNode[K, V]
 }
 
 // Copy the node for safe isolation.
@@ -87,9 +87,9 @@ func (tr *Map[K, V]) copy(n *mapNode[K, V]) *mapNode[K, V] {
 		}
 	}
 	if !n.leaf() {
-		n2.children = new([]*mapNode[K, V])
-		*n2.children = make([]*mapNode[K, V], len(*n.children), tr.max+1)
-		copy(*n2.children, *n.children)
+		n2.children = []*mapNode[K, V]{}
+		n2.children = make([]*mapNode[K, V], len(n.children), tr.max+1)
+		copy(n2.children, n.children)
 	}
 	return n2
 }
@@ -117,7 +117,7 @@ func (tr *Map[K, V]) IsoCopy() *Map[K, V] {
 func (tr *Map[K, V]) newNode(leaf bool) *mapNode[K, V] {
 	n := &mapNode[K, V]{isoid: tr.isoid}
 	if !leaf {
-		n.children = &[]*mapNode[K, V]{}
+		n.children = []*mapNode[K, V]{}
 	}
 	return n
 }
@@ -170,8 +170,8 @@ func (tr *Map[K, V]) Set(key K, value V) (V, bool) {
 		left := tr.root
 		right, median := tr.nodeSplit(left)
 		tr.root = tr.newNode(false)
-		*tr.root.children = make([]*mapNode[K, V], 0, tr.max+1)
-		*tr.root.children = append([]*mapNode[K, V]{}, left, right)
+		tr.root.children = make([]*mapNode[K, V], 0, tr.max+1)
+		tr.root.children = append([]*mapNode[K, V]{}, left, right)
 		tr.root.items = append([]mapPair[K, V]{}, median)
 		tr.root.updateCount()
 		return tr.Set(item.key, item.value)
@@ -192,7 +192,7 @@ func (tr *Map[K, V]) nodeSplit(n *mapNode[K, V],
 	right = tr.newNode(n.leaf())
 	right.items = n.items[i+1:]
 	if !n.leaf() {
-		*right.children = (*n.children)[i+1:]
+		right.children = (n.children)[i+1:]
 	}
 	right.updateCount()
 
@@ -200,7 +200,7 @@ func (tr *Map[K, V]) nodeSplit(n *mapNode[K, V],
 	n.items[i] = tr.empty
 	n.items = n.items[:i:i]
 	if !n.leaf() {
-		*n.children = (*n.children)[: i+1 : i+1]
+		n.children = (n.children)[: i+1 : i+1]
 	}
 	n.updateCount()
 	return right, median
@@ -208,10 +208,11 @@ func (tr *Map[K, V]) nodeSplit(n *mapNode[K, V],
 
 func (n *mapNode[K, V]) updateCount() {
 	n.count = len(n.items)
-	if !n.leaf() {
-		for i := 0; i < len(*n.children); i++ {
-			n.count += (*n.children)[i].count
-		}
+	if n.leaf() {
+		return
+	}
+	for _, it := range n.children {
+		n.count += it.count
 	}
 }
 
@@ -234,15 +235,15 @@ func (tr *Map[K, V]) nodeSet(pn **mapNode[K, V], item mapPair[K, V],
 		n.count++
 		return tr.empty.value, false, false
 	}
-	prev, replaced, split = tr.nodeSet(&(*n.children)[i], item)
+	prev, replaced, split = tr.nodeSet(&(n.children)[i], item)
 	if split {
 		if len(n.items) == tr.max {
 			return tr.empty.value, false, true
 		}
-		right, median := tr.nodeSplit((*n.children)[i])
-		*n.children = append(*n.children, nil)
-		copy((*n.children)[i+1:], (*n.children)[i:])
-		(*n.children)[i+1] = right
+		right, median := tr.nodeSplit((n.children)[i])
+		n.children = append(n.children, nil)
+		copy((n.children)[i+1:], (n.children)[i:])
+		(n.children)[i+1] = right
 		n.items = append(n.items, tr.empty)
 		copy(n.items[i+1:], n.items[i:])
 		n.items[i] = median
@@ -282,14 +283,14 @@ func (tr *Map[K, V]) nodeScan(cn **mapNode[K, V],
 		return true
 	}
 	for i := 0; i < len(n.items); i++ {
-		if !tr.nodeScan(&(*n.children)[i], iter, mut) {
+		if !tr.nodeScan(&(n.children)[i], iter, mut) {
 			return false
 		}
 		if !iter(n.items[i].key, n.items[i].value) {
 			return false
 		}
 	}
-	return tr.nodeScan(&(*n.children)[len(*n.children)-1], iter, mut)
+	return tr.nodeScan(&(n.children)[len(n.children)-1], iter, mut)
 }
 
 // Get a value for key.
@@ -306,7 +307,7 @@ func (tr *Map[K, V]) Get(key K) (V, bool) {
 		if n.leaf() {
 			return tr.empty.value, false
 		}
-		n = (*n.children)[i]
+		n = (n.children)[i]
 	}
 }
 
@@ -334,7 +335,7 @@ func (tr *Map[K, V]) GetMut(key K) (V, bool) {
 		if n.leaf() {
 			return tr.empty.value, false
 		}
-		n = tr.isoLoad(&(*n.children)[i], true)
+		n = tr.isoLoad(&(n.children)[i], true)
 	}
 }
 
@@ -354,7 +355,7 @@ func (tr *Map[K, V]) Delete(key K) (V, bool) {
 		return tr.empty.value, false
 	}
 	if len(tr.root.items) == 0 && !tr.root.leaf() {
-		tr.root = (*tr.root.children)[0]
+		tr.root = (tr.root.children)[0]
 	}
 	tr.count--
 	if tr.count == 0 {
@@ -366,24 +367,21 @@ func (tr *Map[K, V]) Delete(key K) (V, bool) {
 func (tr *Map[K, V]) delete(pn **mapNode[K, V], max bool, key K,
 ) (mapPair[K, V], bool) {
 	n := tr.isoLoad(pn, true)
-	var i int
-	var found bool
-	if max {
-		i, found = len(n.items)-1, true
-	} else {
+	i, found := len(n.items)-1, true
+	if !max {
 		i, found = tr.search(n, key)
 	}
 	if n.leaf() {
-		if found {
-			// found the items at the leaf, remove it and return.
-			prev := n.items[i]
-			copy(n.items[i:], n.items[i+1:])
-			n.items[len(n.items)-1] = tr.empty
-			n.items = n.items[:len(n.items)-1]
-			n.count--
-			return prev, true
+		if !found {
+			return tr.empty, false
 		}
-		return tr.empty, false
+		// found the items at the leaf, remove it and return.
+		prev := n.items[i]
+		copy(n.items[i:], n.items[i+1:])
+		n.items[len(n.items)-1] = tr.empty
+		n.items = n.items[:len(n.items)-1]
+		n.count--
+		return prev, true
 	}
 
 	var prev mapPair[K, V]
@@ -391,21 +389,21 @@ func (tr *Map[K, V]) delete(pn **mapNode[K, V], max bool, key K,
 	if found {
 		if max {
 			i++
-			prev, deleted = tr.delete(&(*n.children)[i], true, tr.empty.key)
+			prev, deleted = tr.delete(&(n.children)[i], true, tr.empty.key)
 		} else {
 			prev = n.items[i]
-			maxItem, _ := tr.delete(&(*n.children)[i], true, tr.empty.key)
+			maxItem, _ := tr.delete(&(n.children)[i], true, tr.empty.key)
 			deleted = true
 			n.items[i] = maxItem
 		}
 	} else {
-		prev, deleted = tr.delete(&(*n.children)[i], max, key)
+		prev, deleted = tr.delete(&(n.children)[i], max, key)
 	}
 	if !deleted {
 		return tr.empty, false
 	}
 	n.count--
-	if len((*n.children)[i].items) < tr.min {
+	if len((n.children)[i].items) < tr.min {
 		tr.nodeRebalance(n, i)
 	}
 	return prev, true
@@ -420,8 +418,8 @@ func (tr *Map[K, V]) nodeRebalance(n *mapNode[K, V], i int) {
 	}
 
 	// ensure copy-on-write
-	left := tr.isoLoad(&(*n.children)[i], true)
-	right := tr.isoLoad(&(*n.children)[i+1], true)
+	left := tr.isoLoad(&(n.children)[i], true)
+	right := tr.isoLoad(&(n.children)[i+1], true)
 
 	if len(left.items)+len(right.items) < tr.max {
 		// Merges the left and right children nodes together as a single node
@@ -433,7 +431,7 @@ func (tr *Map[K, V]) nodeRebalance(n *mapNode[K, V], i int) {
 		left.items = append(left.items, n.items[i])
 		left.items = append(left.items, right.items...)
 		if !left.leaf() {
-			*left.children = append(*left.children, *right.children...)
+			left.children = append(left.children, right.children...)
 		}
 		left.count += right.count + 1
 
@@ -443,9 +441,9 @@ func (tr *Map[K, V]) nodeRebalance(n *mapNode[K, V], i int) {
 		n.items = n.items[:len(n.items)-1]
 
 		// move the children over one slot
-		copy((*n.children)[i+1:], (*n.children)[i+2:])
-		(*n.children)[len(*n.children)-1] = nil
-		(*n.children) = (*n.children)[:len(*n.children)-1]
+		copy((n.children)[i+1:], (n.children)[i+2:])
+		(n.children)[len(n.children)-1] = nil
+		(n.children) = (n.children)[:len(n.children)-1]
 	} else if len(left.items) > len(right.items) {
 		// move left -> right over one slot
 
@@ -463,13 +461,13 @@ func (tr *Map[K, V]) nodeRebalance(n *mapNode[K, V], i int) {
 
 		if !left.leaf() {
 			// move the left-node last child into the right-node first slot
-			*right.children = append(*right.children, nil)
-			copy((*right.children)[1:], *right.children)
-			(*right.children)[0] = (*left.children)[len(*left.children)-1]
-			(*left.children)[len(*left.children)-1] = nil
-			(*left.children) = (*left.children)[:len(*left.children)-1]
-			left.count -= (*right.children)[0].count
-			right.count += (*right.children)[0].count
+			right.children = append(right.children, nil)
+			copy((right.children)[1:], right.children)
+			(right.children)[0] = (left.children)[len(left.children)-1]
+			(left.children)[len(left.children)-1] = nil
+			(left.children) = (left.children)[:len(left.children)-1]
+			left.count -= (right.children)[0].count
+			right.count += (right.children)[0].count
 		}
 	} else {
 		// move left <- right over one slot
@@ -484,12 +482,12 @@ func (tr *Map[K, V]) nodeRebalance(n *mapNode[K, V], i int) {
 		right.count--
 
 		if !left.leaf() {
-			*left.children = append(*left.children, (*right.children)[0])
-			copy(*right.children, (*right.children)[1:])
-			(*right.children)[len(*right.children)-1] = nil
-			*right.children = (*right.children)[:len(*right.children)-1]
-			left.count += (*left.children)[len(*left.children)-1].count
-			right.count -= (*left.children)[len(*left.children)-1].count
+			left.children = append(left.children, (right.children)[0])
+			copy(right.children, (right.children)[1:])
+			(right.children)[len(right.children)-1] = nil
+			right.children = (right.children)[:len(right.children)-1]
+			left.count += (left.children)[len(left.children)-1].count
+			right.count -= (left.children)[len(left.children)-1].count
 		}
 	}
 }
@@ -521,7 +519,7 @@ func (tr *Map[K, V]) nodeAscend(cn **mapNode[K, V], pivot K,
 	i, found := tr.search(n, pivot)
 	if !found {
 		if !n.leaf() {
-			if !tr.nodeAscend(&(*n.children)[i], pivot, iter, mut) {
+			if !tr.nodeAscend(&(n.children)[i], pivot, iter, mut) {
 				return false
 			}
 		}
@@ -535,7 +533,7 @@ func (tr *Map[K, V]) nodeAscend(cn **mapNode[K, V], pivot K,
 			return false
 		}
 		if !n.leaf() {
-			if !tr.nodeScan(&(*n.children)[i+1], iter, mut) {
+			if !tr.nodeScan(&(n.children)[i+1], iter, mut) {
 				return false
 			}
 		}
@@ -570,14 +568,14 @@ func (tr *Map[K, V]) nodeReverse(cn **mapNode[K, V],
 		}
 		return true
 	}
-	if !tr.nodeReverse(&(*n.children)[len(*n.children)-1], iter, mut) {
+	if !tr.nodeReverse(&(n.children)[len(n.children)-1], iter, mut) {
 		return false
 	}
 	for i := len(n.items) - 1; i >= 0; i-- {
 		if !iter(n.items[i].key, n.items[i].value) {
 			return false
 		}
-		if !tr.nodeReverse(&(*n.children)[i], iter, mut) {
+		if !tr.nodeReverse(&(n.children)[i], iter, mut) {
 			return false
 		}
 	}
@@ -613,7 +611,7 @@ func (tr *Map[K, V]) nodeDescend(cn **mapNode[K, V], pivot K,
 	i, found := tr.search(n, pivot)
 	if !found {
 		if !n.leaf() {
-			if !tr.nodeDescend(&(*n.children)[i], pivot, iter, mut) {
+			if !tr.nodeDescend(&(n.children)[i], pivot, iter, mut) {
 				return false
 			}
 		}
@@ -624,7 +622,7 @@ func (tr *Map[K, V]) nodeDescend(cn **mapNode[K, V], pivot K,
 			return false
 		}
 		if !n.leaf() {
-			if !tr.nodeReverse(&(*n.children)[i], iter, mut) {
+			if !tr.nodeReverse(&(n.children)[i], iter, mut) {
 				return false
 			}
 		}
@@ -651,7 +649,7 @@ func (tr *Map[K, V]) Load(key K, value V) (V, bool) {
 			}
 			break
 		}
-		n = tr.isoLoad(&(*n.children)[len(*n.children)-1], true)
+		n = tr.isoLoad(&(n.children)[len(n.children)-1], true)
 	}
 	// revert the counts
 	n = tr.root
@@ -660,7 +658,7 @@ func (tr *Map[K, V]) Load(key K, value V) (V, bool) {
 		if n.leaf() {
 			break
 		}
-		n = (*n.children)[len(*n.children)-1]
+		n = (n.children)[len(n.children)-1]
 	}
 	return tr.Set(item.key, item.value)
 }
@@ -685,7 +683,7 @@ func (tr *Map[K, V]) minMut(mut bool) (key K, value V, ok bool) {
 			item := n.items[0]
 			return item.key, item.value, true
 		}
-		n = tr.isoLoad(&(*n.children)[0], mut)
+		n = tr.isoLoad(&(n.children)[0], mut)
 	}
 }
 
@@ -709,7 +707,7 @@ func (tr *Map[K, V]) maxMut(mut bool) (K, V, bool) {
 			item := n.items[len(n.items)-1]
 			return item.key, item.value, true
 		}
-		n = tr.isoLoad(&(*n.children)[len(*n.children)-1], mut)
+		n = tr.isoLoad(&(n.children)[len(n.children)-1], mut)
 	}
 }
 
@@ -737,7 +735,7 @@ func (tr *Map[K, V]) PopMin() (K, V, bool) {
 			}
 			return item.key, item.value, true
 		}
-		n = tr.isoLoad(&(*n.children)[0], true)
+		n = tr.isoLoad(&(n.children)[0], true)
 	}
 	// revert the counts
 	n = tr.root
@@ -746,7 +744,7 @@ func (tr *Map[K, V]) PopMin() (K, V, bool) {
 		if n.leaf() {
 			break
 		}
-		n = (*n.children)[0]
+		n = (n.children)[0]
 	}
 	value, deleted := tr.Delete(item.key)
 	if deleted {
@@ -778,7 +776,7 @@ func (tr *Map[K, V]) PopMax() (K, V, bool) {
 			}
 			return item.key, item.value, true
 		}
-		n = tr.isoLoad(&(*n.children)[len(*n.children)-1], true)
+		n = tr.isoLoad(&(n.children)[len(n.children)-1], true)
 	}
 	// revert the counts
 	n = tr.root
@@ -787,7 +785,7 @@ func (tr *Map[K, V]) PopMax() (K, V, bool) {
 		if n.leaf() {
 			break
 		}
-		n = (*n.children)[len(*n.children)-1]
+		n = (n.children)[len(n.children)-1]
 	}
 	value, deleted := tr.Delete(item.key)
 	if deleted {
@@ -817,14 +815,14 @@ func (tr *Map[K, V]) getAt(index int, mut bool) (K, V, bool) {
 		}
 		i := 0
 		for ; i < len(n.items); i++ {
-			if index < (*n.children)[i].count {
+			if index < (n.children)[i].count {
 				break
-			} else if index == (*n.children)[i].count {
+			} else if index == (n.children)[i].count {
 				return n.items[i].key, n.items[i].value, true
 			}
-			index -= (*n.children)[i].count + 1
+			index -= (n.children)[i].count + 1
 		}
-		n = tr.isoLoad(&(*n.children)[i], mut)
+		n = tr.isoLoad(&(n.children)[i], mut)
 	}
 }
 
@@ -859,24 +857,24 @@ outer:
 		}
 		i := 0
 		for ; i < len(n.items); i++ {
-			if index < (*n.children)[i].count {
+			if index < (n.children)[i].count {
 				break
-			} else if index == (*n.children)[i].count {
+			} else if index == (n.children)[i].count {
 				item = n.items[i]
 				path = append(path, uint8(i))
 				break outer
 			}
-			index -= (*n.children)[i].count + 1
+			index -= (n.children)[i].count + 1
 		}
 		path = append(path, uint8(i))
-		n = tr.isoLoad(&(*n.children)[i], true)
+		n = tr.isoLoad(&(n.children)[i], true)
 	}
 	// revert the counts
 	n = tr.root
 	for i := 0; i < len(path); i++ {
 		n.count++
 		if !n.leaf() {
-			n = (*n.children)[uint8(path[i])]
+			n = (n.children)[uint8(path[i])]
 		}
 	}
 	value, deleted := tr.Delete(item.key)
@@ -897,7 +895,7 @@ func (tr *Map[K, V]) Height() int {
 			if n.leaf() {
 				break
 			}
-			n = (*n.children)[0]
+			n = (n.children)[0]
 		}
 	}
 	return height
@@ -958,7 +956,7 @@ func (iter *MapIter[K, V]) Seek(key K) bool {
 			iter.stack[len(iter.stack)-1].i--
 			return iter.Next()
 		}
-		n = iter.tr.isoLoad(&(*n.children)[i], iter.mut)
+		n = iter.tr.isoLoad(&(n.children)[i], iter.mut)
 	}
 }
 
@@ -981,7 +979,7 @@ func (iter *MapIter[K, V]) First() bool {
 		if n.leaf() {
 			break
 		}
-		n = iter.tr.isoLoad(&(*n.children)[0], iter.mut)
+		n = iter.tr.isoLoad(&(n.children)[0], iter.mut)
 	}
 	s := &iter.stack[len(iter.stack)-1]
 	iter.item = s.n.items[s.i]
@@ -1006,7 +1004,7 @@ func (iter *MapIter[K, V]) Last() bool {
 			iter.stack[len(iter.stack)-1].i--
 			break
 		}
-		n = iter.tr.isoLoad(&(*n.children)[len(n.items)], iter.mut)
+		n = iter.tr.isoLoad(&(n.children)[len(n.items)], iter.mut)
 	}
 	s := &iter.stack[len(iter.stack)-1]
 	iter.item = s.n.items[s.i]
@@ -1046,13 +1044,13 @@ func (iter *MapIter[K, V]) Next() bool {
 			}
 		}
 	} else {
-		n := iter.tr.isoLoad(&(*s.n.children)[s.i], iter.mut)
+		n := iter.tr.isoLoad(&(s.n.children)[s.i], iter.mut)
 		for {
 			iter.stack = append(iter.stack, mapIterStackItem[K, V]{n, 0})
 			if n.leaf() {
 				break
 			}
-			n = iter.tr.isoLoad(&(*n.children)[0], iter.mut)
+			n = iter.tr.isoLoad(&(n.children)[0], iter.mut)
 		}
 	}
 	s = &iter.stack[len(iter.stack)-1]
@@ -1094,7 +1092,7 @@ func (iter *MapIter[K, V]) Prev() bool {
 			}
 		}
 	} else {
-		n := iter.tr.isoLoad(&(*s.n.children)[s.i], iter.mut)
+		n := iter.tr.isoLoad(&(s.n.children)[s.i], iter.mut)
 		for {
 			iter.stack = append(iter.stack,
 				mapIterStackItem[K, V]{n, len(n.items)})
@@ -1102,7 +1100,7 @@ func (iter *MapIter[K, V]) Prev() bool {
 				iter.stack[len(iter.stack)-1].i--
 				break
 			}
-			n = iter.tr.isoLoad(&(*n.children)[len(n.items)], iter.mut)
+			n = iter.tr.isoLoad(&(n.children)[len(n.items)], iter.mut)
 		}
 	}
 	s = &iter.stack[len(iter.stack)-1]
@@ -1146,10 +1144,10 @@ func (tr *Map[K, V]) nodeValues(cn **mapNode[K, V], values []V, mut bool) []V {
 		return values
 	}
 	for i := 0; i < len(n.items); i++ {
-		values = tr.nodeValues(&(*n.children)[i], values, mut)
+		values = tr.nodeValues(&(n.children)[i], values, mut)
 		values = append(values, n.items[i].value)
 	}
-	return tr.nodeValues(&(*n.children)[len(*n.children)-1], values, mut)
+	return tr.nodeValues(&(n.children)[len(n.children)-1], values, mut)
 }
 
 // Keys returns all the keys in order.
@@ -1169,10 +1167,10 @@ func (n *mapNode[K, V]) keys(keys []K) []K {
 		return keys
 	}
 	for i := 0; i < len(n.items); i++ {
-		keys = (*n.children)[i].keys(keys)
+		keys = (n.children)[i].keys(keys)
 		keys = append(keys, n.items[i].key)
 	}
-	return (*n.children)[len(*n.children)-1].keys(keys)
+	return (n.children)[len(n.children)-1].keys(keys)
 }
 
 // KeyValues returns all the keys and values in order.
@@ -1205,12 +1203,11 @@ func (tr *Map[K, V]) nodeKeyValues(cn **mapNode[K, V], keys []K, values []V,
 		return keys, values
 	}
 	for i := 0; i < len(n.items); i++ {
-		keys, values = tr.nodeKeyValues(&(*n.children)[i], keys, values, mut)
+		keys, values = tr.nodeKeyValues(&(n.children)[i], keys, values, mut)
 		keys = append(keys, n.items[i].key)
 		values = append(values, n.items[i].value)
 	}
-	return tr.nodeKeyValues(&(*n.children)[len(*n.children)-1], keys, values,
-		mut)
+	return tr.nodeKeyValues(&(n.children)[len(n.children)-1], keys, values, mut)
 }
 
 // Clear will delete all items.
