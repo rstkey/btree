@@ -3,14 +3,10 @@
 // license that can be found in the LICENSE file.
 package btree
 
-import "sync"
-
 type BTreeG[T any] struct {
 	isoid        uint64
-	mu           *sync.RWMutex
 	root         *node[T]
 	count        int
-	locks        bool
 	copyItems    bool
 	isoCopyItems bool
 	less         func(a, b T) bool
@@ -41,9 +37,6 @@ type Options struct {
 	// 2-4 children. See https://en.wikipedia.org/wiki/2–3–4_tree.
 	// Default is 32
 	Degree int
-	// NoLocks will disable locking. Otherwide a sync.RWMutex is used to
-	// ensure all operations are safe across multiple goroutines.
-	NoLocks bool
 }
 
 // New returns a new BTree
@@ -54,8 +47,6 @@ func NewBTreeG[T any](less func(a, b T) bool) *BTreeG[T] {
 func NewBTreeGOptions[T any](less func(a, b T) bool, opts Options) *BTreeG[T] {
 	tr := new(BTreeG[T])
 	tr.isoid = newIsoID()
-	tr.mu = new(sync.RWMutex)
-	tr.locks = !opts.NoLocks
 	tr.less = less
 	tr.init(opts.Degree)
 	return tr
@@ -192,14 +183,7 @@ path_match:
 
 // SetHint sets or replace a value for a key using a path hint
 func (tr *BTreeG[T]) SetHint(item T, hint *PathHint) (prev T, replaced bool) {
-	if tr.locks {
-		tr.mu.Lock()
-		prev, replaced = tr.setHint(item, hint)
-		tr.mu.Unlock()
-	} else {
-		prev, replaced = tr.setHint(item, hint)
-	}
-	return prev, replaced
+	return tr.setHint(item, hint)
 }
 
 func (tr *BTreeG[T]) setHint(item T, hint *PathHint) (prev T, replaced bool) {
@@ -355,9 +339,6 @@ func (tr *BTreeG[T]) ScanMut(iter func(item T) bool) {
 }
 
 func (tr *BTreeG[T]) scan(iter func(item T) bool, mut bool) {
-	if tr.lock(mut) {
-		defer tr.unlock(mut)
-	}
 	if tr.root == nil {
 		return
 	}
@@ -405,9 +386,6 @@ func (tr *BTreeG[T]) GetHintMut(key T, hint *PathHint) (value T, ok bool) {
 
 // GetHint gets a value for key using a path hint
 func (tr *BTreeG[T]) getHint(key T, hint *PathHint, mut bool) (T, bool) {
-	if tr.lock(mut) {
-		defer tr.unlock(mut)
-	}
 	if tr.root == nil {
 		return tr.empty, false
 	}
@@ -441,9 +419,6 @@ func (tr *BTreeG[T]) Delete(key T) (T, bool) {
 // deleted value.
 // Returns false if there was no value by that key found.
 func (tr *BTreeG[T]) DeleteHint(key T, hint *PathHint) (T, bool) {
-	if tr.lock(true) {
-		defer tr.unlock(true)
-	}
 	return tr.deleteHint(key, hint)
 }
 
@@ -607,9 +582,6 @@ func (tr *BTreeG[T]) AscendMut(pivot T, iter func(item T) bool) {
 	tr.ascend(pivot, iter, true)
 }
 func (tr *BTreeG[T]) ascend(pivot T, iter func(item T) bool, mut bool) {
-	if tr.lock(mut) {
-		defer tr.unlock(mut)
-	}
 	if tr.root == nil {
 		return
 	}
@@ -655,9 +627,6 @@ func (tr *BTreeG[T]) ReverseMut(iter func(item T) bool) {
 	tr.reverse(iter, true)
 }
 func (tr *BTreeG[T]) reverse(iter func(item T) bool, mut bool) {
-	if tr.lock(mut) {
-		defer tr.unlock(mut)
-	}
 	if tr.root == nil {
 		return
 	}
@@ -699,9 +668,6 @@ func (tr *BTreeG[T]) DescendMut(pivot T, iter func(item T) bool) {
 	tr.descend(pivot, iter, true)
 }
 func (tr *BTreeG[T]) descend(pivot T, iter func(item T) bool, mut bool) {
-	if tr.lock(mut) {
-		defer tr.unlock(mut)
-	}
 	if tr.root == nil {
 		return
 	}
@@ -737,9 +703,6 @@ func (tr *BTreeG[T]) nodeDescend(cn **node[T], pivot T, hint *PathHint,
 
 // Load is for bulk loading pre-sorted items
 func (tr *BTreeG[T]) Load(item T) (T, bool) {
-	if tr.lock(true) {
-		defer tr.unlock(true)
-	}
 	if tr.root == nil {
 		return tr.setHint(item, nil)
 	}
@@ -781,9 +744,6 @@ func (tr *BTreeG[T]) MinMut() (T, bool) {
 }
 
 func (tr *BTreeG[T]) minMut(mut bool) (T, bool) {
-	if tr.lock(mut) {
-		defer tr.unlock(mut)
-	}
 	if tr.root == nil {
 		return tr.empty, false
 	}
@@ -807,9 +767,6 @@ func (tr *BTreeG[T]) MaxMut() (T, bool) {
 }
 
 func (tr *BTreeG[T]) maxMut(mut bool) (T, bool) {
-	if tr.lock(mut) {
-		defer tr.unlock(mut)
-	}
 	if tr.root == nil {
 		return tr.empty, false
 	}
@@ -825,9 +782,6 @@ func (tr *BTreeG[T]) maxMut(mut bool) (T, bool) {
 // PopMin removes the minimum item in tree and returns it.
 // Returns nil if the tree has no items.
 func (tr *BTreeG[T]) PopMin() (T, bool) {
-	if tr.lock(true) {
-		defer tr.unlock(true)
-	}
 	if tr.root == nil {
 		return tr.empty, false
 	}
@@ -866,9 +820,6 @@ func (tr *BTreeG[T]) PopMin() (T, bool) {
 // PopMax removes the maximum item in tree and returns it.
 // Returns nil if the tree has no items.
 func (tr *BTreeG[T]) PopMax() (T, bool) {
-	if tr.lock(true) {
-		defer tr.unlock(true)
-	}
 	if tr.root == nil {
 		return tr.empty, false
 	}
@@ -912,9 +863,6 @@ func (tr *BTreeG[T]) GetAtMut(index int) (T, bool) {
 	return tr.getAt(index, true)
 }
 func (tr *BTreeG[T]) getAt(index int, mut bool) (T, bool) {
-	if tr.lock(mut) {
-		defer tr.unlock(mut)
-	}
 	if tr.root == nil || index < 0 || index >= tr.count {
 		return tr.empty, false
 	}
@@ -939,9 +887,6 @@ func (tr *BTreeG[T]) getAt(index int, mut bool) (T, bool) {
 // DeleteAt deletes the item at index.
 // Return nil if the tree is empty or the index is out of bounds.
 func (tr *BTreeG[T]) DeleteAt(index int) (T, bool) {
-	if tr.lock(true) {
-		defer tr.unlock(true)
-	}
 	if tr.root == nil || index < 0 || index >= tr.count {
 		return tr.empty, false
 	}
@@ -1001,9 +946,6 @@ outer:
 // Height returns the height of the tree.
 // Returns zero if tree has no items.
 func (tr *BTreeG[T]) Height() int {
-	if tr.lock(false) {
-		defer tr.unlock(false)
-	}
 	var height int
 	if tr.root != nil {
 		n := tr.root
@@ -1027,9 +969,6 @@ func (tr *BTreeG[T]) WalkMut(iter func(item []T) bool) {
 	tr.walk(iter, true)
 }
 func (tr *BTreeG[T]) walk(iter func(item []T) bool, mut bool) {
-	if tr.lock(mut) {
-		defer tr.unlock(mut)
-	}
 	if tr.root == nil {
 		return
 	}
@@ -1066,41 +1005,17 @@ func (tr *BTreeG[T]) Copy() *BTreeG[T] {
 }
 
 func (tr *BTreeG[T]) IsoCopy() *BTreeG[T] {
-	if tr.lock(true) {
-		defer tr.unlock(true)
-	}
 	tr.isoid = newIsoID()
 	tr2 := new(BTreeG[T])
 	*tr2 = *tr
-	tr2.mu = new(sync.RWMutex)
 	tr2.isoid = newIsoID()
 	return tr2
-}
-
-func (tr *BTreeG[T]) lock(write bool) bool {
-	if tr.locks {
-		if write {
-			tr.mu.Lock()
-		} else {
-			tr.mu.RLock()
-		}
-	}
-	return tr.locks
-}
-
-func (tr *BTreeG[T]) unlock(write bool) {
-	if write {
-		tr.mu.Unlock()
-	} else {
-		tr.mu.RUnlock()
-	}
 }
 
 // Iter represents an iterator
 type IterG[T any] struct {
 	tr      *BTreeG[T]
 	mut     bool
-	locked  bool
 	seeked  bool
 	atstart bool
 	atend   bool
@@ -1127,7 +1042,6 @@ func (tr *BTreeG[T]) iter(mut bool) IterG[T] {
 	var iter IterG[T]
 	iter.tr = tr
 	iter.mut = mut
-	iter.locked = tr.lock(iter.mut)
 	return iter
 }
 
@@ -1213,10 +1127,6 @@ func (iter *IterG[T]) Last() bool {
 func (iter *IterG[T]) Release() {
 	if iter.tr == nil {
 		return
-	}
-	if iter.locked {
-		iter.tr.unlock(iter.mut)
-		iter.locked = false
 	}
 	iter.stack = nil
 	iter.tr = nil
@@ -1333,9 +1243,6 @@ func (tr *BTreeG[T]) ItemsMut() []T {
 }
 
 func (tr *BTreeG[T]) items(mut bool) []T {
-	if tr.lock(mut) {
-		defer tr.unlock(mut)
-	}
 	items := make([]T, 0, tr.Len())
 	if tr.root != nil {
 		items = tr.nodeItems(&tr.root, items, mut)
@@ -1357,9 +1264,6 @@ func (tr *BTreeG[T]) nodeItems(cn **node[T], items []T, mut bool) []T {
 
 // Clear will delete all items.
 func (tr *BTreeG[T]) Clear() {
-	if tr.lock(true) {
-		defer tr.unlock(true)
-	}
 	tr.root = nil
 	tr.count = 0
 }

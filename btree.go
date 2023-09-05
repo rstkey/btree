@@ -15,20 +15,6 @@ func New(less func(a, b any) bool) *BTree {
 	return &BTree{base: NewBTreeG(less)}
 }
 
-// NewNonConcurrent returns a new BTree which is not safe for concurrent
-// write operations by multiple goroutines.
-//
-// This is useful for when you do not need the BTree to manage the locking,
-// but would rather do it yourself.
-//
-// Deprecated: use NewOptions
-func NewNonConcurrent(less func(a, b any) bool) *BTree {
-	if less == nil {
-		panic("nil less")
-	}
-	return &BTree{base: NewBTreeGOptions(less, Options{NoLocks: true})}
-}
-
 // NewOptions returns a new BTree
 func NewOptions(less func(a, b any) bool, opts Options) *BTree {
 	if less == nil {

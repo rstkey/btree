@@ -28,7 +28,7 @@ func TestBTree(t *testing.T) {
 			msg, ok := recover().(string)
 			assert(ok && msg == "nil less")
 		}()
-		NewNonConcurrent(nil)
+		New(nil)
 	}()
 	N := 1_000_000
 	for j := 0; j < 2; j++ {
@@ -36,7 +36,7 @@ func TestBTree(t *testing.T) {
 		if j == 0 {
 			tr = New(intLess)
 		} else {
-			tr = NewNonConcurrent(intLess)
+			tr = New(intLess)
 		}
 		for i := 0; i < N; i++ {
 			assert(tr.Load(i) == nil)
@@ -140,7 +140,7 @@ func TestBTree(t *testing.T) {
 				msg, ok := recover().(string)
 				assert(ok && msg == "nil item")
 			}()
-			tr := NewNonConcurrent(intLess)
+			tr := New(intLess)
 			tr.Set(nil)
 		}()
 		func() {
@@ -148,7 +148,7 @@ func TestBTree(t *testing.T) {
 				msg, ok := recover().(string)
 				assert(ok && msg == "nil item")
 			}()
-			tr := NewNonConcurrent(intLess)
+			tr := New(intLess)
 			tr.Load(nil)
 		}()
 		assert(tr.Get(nil) == nil)
