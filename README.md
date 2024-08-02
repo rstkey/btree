@@ -1,7 +1,5 @@
 # btree
 
-[![GoDoc](https://godoc.org/github.com/tidwall/btree?status.svg)](https://godoc.org/github.com/tidwall/btree)
-
 An efficient [B-tree](https://en.wikipedia.org/wiki/B-tree) implementation in Go.
 
 ## Features
@@ -17,7 +15,7 @@ An efficient [B-tree](https://en.wikipedia.org/wiki/B-tree) implementation in Go
 To start using this package, install Go and run:
 
 ```sh
-$ go get github.com/tidwall/btree
+$ go get github.com/rust-solman/btree
 ```
 
 ## B-tree types
@@ -67,7 +65,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/tidwall/btree"
+	"github.com/rust-solman/btree"
 )
 
 func main() {
@@ -146,7 +144,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/tidwall/btree"
+	"github.com/rust-solman/btree"
 )
 
 func main() {
@@ -232,7 +230,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/tidwall/btree"
+	"github.com/rust-solman/btree"
 )
 
 type Item struct {
@@ -352,7 +350,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/tidwall/btree"
+	"github.com/rust-solman/btree"
 )
 
 type Item struct {
@@ -435,14 +433,6 @@ func main() {
 	// user:3 Steve
 }
 ```
-
-## Performance
-
-See [tidwall/btree-benchmark](https://github.com/tidwall/btree-benchmark) for benchmark numbers.
-
-## Contact
-
-Josh Baker [@tidwall](http://twitter.com/tidwall)
 
 ## License
 
